@@ -4,13 +4,13 @@ function love.conf(t)
     --window screen
     t.window.title = "Icosaidrium"
     t.window.icon = "assets/images/icosaidrium.png"
-    t.author = "AyanoTheFox"
+    t.author = "BloodWolf"
 --directory
     t.externalstorage = true
     t.identity = "Icosaidrium"
 --modules
     t.modules.audio = false
-    t.modules.physics = false
     t.modules.sound = false
     t.modules.thread = false
+    t.modules.physics = false
 end

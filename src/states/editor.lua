@@ -1,516 +1,703 @@
 editor = {}
-editor.id = ""
+editor.id = "" --the id is the same than the mo name
 
 function editor:enter()
-    --#tables--
+    cam = camera.new(nil, nil, 1, 0)--camera instance
+    touches = multitouch.new()
+    --&variables&--
+    --%tables%--
     if mobile then
-        buttons = {
+        buttons.editor.features = {
+            --z = 11, 12,; v = 23, 24; b = 17, 18; backspace = 1, 2; n = 19, 20; h = 21, 22; f = 25, 26;
+            --m = 27, 28; k = 29, 30; t = 13, 14; s = 15, 16; y = 9, 10; r = 7, 8
             {
-                --move
-                id = "m";
-                x = 0; y = love.graphics.getHeight() - 50; w = 52; h = 50;
-                active = 1; normal = 2;
-                func = function() 
-                    if state == "moving" then state = "placing blocks"
-                    else state = "moving" end
+                id = "s",
+                normal = 15, active = 16,
+                x = 0, y = 0, w = 52, h = 50,
+                callback = function()
+                    love.filesystem.write(editor.id .. "/mapBatch.bin", love.data.compress("string", "zlib", json.encode(meta.map)))
                 end
-            };
+            },
             {
-                --save
-                id = "s";
-                x = 0; y = 0; w = 52; h = 50;
-                active = 4; normal = 3;
-                func = function()
-                    local _data = love.filesystem.newFile("maps/" .. editor.id .. "/mapbatch.json", "w")
-                    _data:write(love.data.compress("string", "zlib", json.encode(meta.map)))
-                    _data:close()
-                end
-            };
-            {
-                --back
-                id = "b";
-                stateRequire = {"placing objects"; "changing layer"};
-                x = 52; y = 0; w = 52; h = 50;
-                active = 6; normal = 5;
-                func = function()
-                    if state == "placing objects" and objectId > 1 then objectId = objectId - 1
-                    elseif state == "changing layer" and layerId > 1 then layerId = layerId - 1 end 
-                end
-            };
-            {
-               --next
-                id = "n";
-                stateRequire = {"placing objects"; "changing layer"};
-                x = 104; y = 0; w = 52; h = 50;
-                active = 8; normal = 7;
-                func = function() 
-                    if state == "placing objects" then objectId = objectId + 1 
-                    elseif layerId < #meta.map.blocks + 1 then layerId = layerId + 1 end 
-                end
-            };
-            {
-                --rotate
-                id = "r";
-                stateRequire = {"placing blocks"};
-                x = 156; y = 0; w = 52; h = 50;
-                active = 10; normal = 9;
-                func = function() textureR = textureR + math.pi / 2 end
-            };
-            {
-                --undo
-                id = "y";
-                x = 208; y = 0; w = 52; h = 50;
-                active = 12; normal = 11;
-                func = function()
-                    if meta.map.blocks[layerId] then
-                        if #meta.map.blocks[layerId] > 0 then
-                            table.insert(trash, 1, meta.map.blocks[layerId][#meta.map.blocks[layerId]])
-                            table.remove(meta.map.blocks[layerId], #meta.map.blocks[layerId])
+                id = "b",
+                normal = 17, active = 18,
+                x = 53, y = 0, w = 52, h = 50,
+                callback = function()
+                    if state == "placing blocks" then
+                        if textureId > 1 then
+                            textureId = textureId - 1
+                        else
+                            textureId = #tileset.quads
+                        end
+                    elseif state == "placing objects" then
+                        if objectId > 1 then
+                            objectId = objectId - 1
+                        end
+                    elseif state == "changing layer" then
+                        if layerId > 1 then
+                            layerId = layerId - 1
+                        else
+                            layerId = #meta.map.blocks
                         end
                     end
                 end
-            };
+            },
             {
-                --redo
-                id = "z";
-                x = 260; y = 0; w = 52; h = 50;
-                active = 14; normal = 13;
-                func = function()
+                id = "n",
+                normal = 19, active = 20,
+                x = 106, y = 0, w = 52, h = 50,
+                callback = function()
+                    if state == "placing blocks" then
+                        if textureId < #tileset.quads then 
+                            textureId = textureId + 1
+                        else
+                            textureId = 1
+                        end
+                    elseif state == "placing objects" then
+                        objectId = objectId + 1
+                    elseif state == "changing layer" then
+                        layerId = layerId + 1
+                    end
+                end
+            },
+            {
+                id = "r",
+                normal = 7, active = 8,
+                x = 159, y = 0, w = 52, h = 50,
+                callback = function()
+                    blockR = blockR + math.pi / 2
+                    if blockR == math.pi * 2 then
+                        blockR = 0
+                    end
+                end
+            },
+            {
+                id = "y",
+                normal = 9, active = 10,
+                x = 212, y = 0, w = 52, h = 50,
+                callback = function()
+                    if #meta.map.blocks > 0 then
+                        table.insert(trash, 1, meta.map.blocks[#meta.map.blocks])
+                        table.remove(meta.map.blocks, #meta.map.blocks)
+                    end
+                end
+            },
+            {
+                id = "z",
+                normal = 11, active = 12,
+                x = 265, y = 0, w = 52, h = 50,
+                callback = function()
                     if #trash > 0 then
-                            table.insert(meta.map.blocks[layerId], trash[1])
+                        table.insert(meta.map.blocks, #meta.map.blocks, trash[1])
                         table.remove(trash, 1)
                     end
                 end
-            };
+            },
             {
-                --vertical
-                id = "v";
-                stateRequire = {"placing blocks"};
-                x = 312; y = 0; w = 52; h = 50;
-                active = 25; normal = 26; 
-                func = function() 
-                    if textureSx == 1 then textureSx = -1 
-                    else textureSx = 1 end
+                id = "v",
+                normal = 24, active = 23,
+                x = 318, y = 0, w = 52, h = 50,
+                callback = function()
+                    blockSx = -blockSx
                 end
-            };
+            },
             {
-                --horizontal
-                id = "h";
-                stateRequire = {"placing blocks"};
-                x = 364; y = 0; w = 52; h = 50;
-                active = 24; normal = 23; 
-                func = function() 
-                    if textureSy == 1 then textureSy = -1 
-                    else textureSy = 1 end
+                id = "h",
+                normal = 21, active = 22,
+                x = 369, y = 0, w = 52, h = 50,
+                callback = function()
+                    blockSy = -blockSy
                 end
-            };
+            },
             {
-                --layer
-                id = "t";
-                x = 416; y = 0; w = 52; h = 50;
-                active = 16; normal = 15; 
-                func = function() state = "changing layer" end
-            };
-            {
-                id = "f";
-                stateRequire = {"placing blocks"};
-                x = 468; y = 0; w = 52; h = 50;
-                active = 28; normal = 27;
-                func = function() openTileset = inverter(openTileset) end
-            };
-            {
-                --alt
-                id = "ralt";
-                x = love.graphics.getWidth() - 260; y = 0; w = 78; h = 50;
-                active = 20; normal = 19;
-                func = function()
-                    if state ~= "placing blocks" and state ~= "deleting objects" then state = "placing blocks"
-                    else state = "placing objects" end
+                id = "t",
+                normal = 13, active = 14,
+                x = 422, y = 0, w = 52, h = 50,
+                callback = function()
+                    state = "changing layer"
                 end
-            };
+            },
             {
-                --backspace
-                id = "backspace";
-                stateRequire = {"placing blocks"; "placing objects"; "deleting blocks"; "deleting objects"; "changing layer"};
-                x = love.graphics.getWidth() - 182; y = 0; w = 104; h = 50;
-                active = 22; normal = 21;
-                func = function()
-                    if state == "changing layer" then meta.map.blocks[layerId] = {}--!delete layer
-                    elseif state ~= "deleting blocks" and state ~= "placing objects" then state = "deleting blocks"
-                    else state = "deleting objects" end
+                id = "f",
+                normal = 25, active = 26,
+                x = 475, y = 0, w = 52, h = 50,
+                callback = function()
+                    navBar = inverter(navBar)
                 end
-            };
+            },
             {
-                --escape
-                id = "escape";
-                x = love.graphics.getWidth() - 78; y = 0; w = 78; h = 50;
-                active = 17; normal = 18;
-                func = function()
+                id = "alt",
+                normal = 5, active = 6,
+                x = love.graphics.getWidth() - 258, y = 0, w = 76, h = 50,
+                callback = function()
+                    if state == "placing blocks" or state == "deleting objects" then
+                        state = "placing objects"
+                    elseif state == "placing objects" or state == "deleting blocks" or state == "looking" or state == "changing layer" then
+                        state = "placing blocks"
+                    end
+                end
+            },
+            {
+                id = "backspace",
+                normal = 1, active = 2,
+                x = love.graphics.getWidth() - 181, y = 0, w = 104, h = 50,
+                callback = function()
+                    if state == "deleting objects" or state == "placing blocks" or state == "looking" then
+                        state = "deleting blocks"
+                    elseif state == "deleting blocks" or state == "placing objects" then
+                        state = "deleting objects"
+                    elseif state == "changing layer" then
+                        deleteLayer(layerId)
+                    end
+                end
+            },
+            {
+                id = "esc",
+                normal = 3, active = 4,
+                x = love.graphics.getWidth() - 76, y = 0, w = 76, h = 50,
+                callback = function()
+                    editor.id = nil
                     tileset.sheet:release()
-                    mapBatch:release()
-                    gs.switch(states.manager)
+                    for _, quad in ipairs(tileset.quads) do
+                        quad:release()
+                    end
+                    gamestate.switch(states.manager)
+                end
+            },
+            {
+                id = "m",
+                normal = 27, active = 28,
+                x = 0, y = love.graphics.getHeight() - 50, w = 52, h = 50,
+                callback = function()
+                    state = "looking"
                 end
             }
         }
     else
-        buttons = {
+        buttons.editor.features = {
+            --z = 11, 12,; v = 23, 24; b = 17, 18; backspace = 1, 2; n = 19, 20; h = 21, 22; f = 25, 26;
+            --m = 27, 28; k = 29, 30; t = 13, 14; s = 15, 16; y = 9, 10; r = 7, 8
             {
-                --save
-                id = "s";
-                x = 0; y = 0; w = 32; h = 32;
-                quad = 1;
-                func = function()
-                    local _data = love.filesystem.newFile("maps/" .. editor.id .. "/mapbatch.json", "w")
-                    _data:write(love.data.compress("string", "zlib", json.encode(meta.map)))
-                    _data:close()
+                id = "s",
+                normal = 2,
+                x = 0, y = 0, w = 52, h = 50,
+                callback = function()
+                    love.filesystem.write(editor.id .. "/mapBatch.bin", love.data.compress("string", "zlib", json.encode(meta.map)))
                 end
-            };
+            },
             {
-                --back
-                id = "b";
-                stateRequire = {"placing objects"; "changing layer"};
-                x = 32; y = 0; w = 32; h = 32;
-                quad = 4;
-                func = function()
-                    if state == "placing objects" and objectId > 1 then objectId = objectId - 1
-                    elseif state == "changing layer" and layerId > 1 then layerId = layerId - 1 end 
-                end
-            };
-            {
-               --next
-                id = "n";
-                stateRequire = {"placing objects"; "changing layer"};
-                x = 64; y = 0; w = 32; h = 32;
-                quad = 5;
-                func = function() 
-                    if state == "placing objects" then objectId = objectId + 1 
-                    elseif layerId < #meta.map.blocks + 1 then layerId = layerId + 1 end 
-                end
-            };
-            {
-             --rotate
-                id = "r";
-                stateRequire = {"placing blocks"};
-                x = 96; y = 0; w = 32; h = 32;
-                quad = 3;
-                func = function() textureR = textureR + math.pi / 2 end
-            };
-            {
-                 --undo
-                id = "y";
-                x = 128; y = 0; w = 32; h = 32;
-                quad = 6;
-                func = function()
-                     if meta.map.blocks[layerId] then
-                        if #meta.map.blocks[layerId] > 0 then
-                            table.insert(trash, 1, meta.map.blocks[layerId][#meta.map.blocks[layerId]])
-                            table.remove(meta.map.blocks[layerId], #meta.map.blocks[layerId])
+                id = "b",
+                normal = 3,
+                x = 53, y = 0, w = 52, h = 50,
+                callback = function()
+                    if state == "placing blocks" then
+                        if textureId > 1 then
+                            textureId = textureId - 1
+                        else
+                            textureId = #tileset.quads
+                        end
+                    elseif state == "placing objects" then
+                        if objectId > 1 then
+                            objectId = objectId - 1
+                        end
+                    elseif state == "changing layer" then
+                        if layerId > 1 then
+                            layerId = layerId - 1
+                        else
+                            layerId = #meta.map.blocks
                         end
                     end
                 end
-            };
+            },
             {
-                --redo
-                id = "z";
-                x = 160; y = 0; w = 32; h = 32;
-                quad = 7;
-                func = function()
+                id = "n",
+                normal = 4,
+                x = 106, y = 0, w = 52, h = 50,
+                callback = function()
+                    if state == "placing blocks" then
+                        if textureId < #tileset.quads then 
+                            textureId = textureId + 1
+                        else
+                            textureId = 1
+                        end
+                    elseif state == "placing objects" then
+                        objectId = objectId + 1
+                    elseif state == "changing layer" then
+                        layerId = layerId + 1
+                    end
+                end
+            },
+            {
+                id = "r",
+                normal = 7,
+                x = 159, y = 0, w = 52, h = 50,
+                callback = function()
+                    blockR = blockR + math.pi / 2
+                    if blockR == math.pi * 2 then
+                        blockR = 0
+                    end
+                end
+            },
+            {
+                id = "y",
+                normal = 5,
+                x = 212, y = 0, w = 52, h = 50,
+                callback = function()
+                    if #meta.map.blocks > 0 then
+                        table.insert(trash, 1, meta.map.blocks[#meta.map.blocks])
+                        table.remove(meta.map.blocks, #meta.map.blocks)
+                    end
+                end
+            },
+            {
+                id = "z",
+                normal = 6,
+                x = 265, y = 0, w = 52, h = 50,
+                callback = function()
                     if #trash > 0 then
-                        table.insert(meta.map.blocks[layerId], trash[1])
+                        table.insert(meta.map.blocks, #meta.map.blocks, trash[1])
                         table.remove(trash, 1)
                     end
                 end
-            };
+            },
             {
-                --vertical
-                id = "v";
-                stateRequire = {"placing blocks"};
-                x = 192; y = 0; w = 32; h = 32;
-                quad = 9; 
-                func = function() 
-                    if textureSx == 1 then textureSx = -1 
-                    else textureSx = 1 end
+                id = "v",
+                normal = 8,
+                x = 318, y = 0, w = 52, h = 50,
+                callback = function()
+                    blockSx = -blockSx
                 end
-            };
+            },
             {
-                --horizontal
-                id = "h";
-                stateRequire = {"placing blocks"};
-                x = 224; y = 0; w = 32; h = 32;
-                quad = 10; 
-                func = function() 
-                    if textureSy == 1 then textureSy = -1 
-                    else textureSy = 1 end
+                id = "h",
+                normal = 9,
+                x = 369, y = 0, w = 52, h = 50,
+                callback = function()
+                    blockSy = -blockSy
                 end
-            };
+            },
             {
-                --layer
-                id = "t";
-                x = 256; y = 0; w = 32; h = 32;
-                quad = 2; 
-                func = function() state = "changing layer" end
-            };
-            {
-                id = "f";
-                stateRequire = {"placing blocks"};
-                x = 288; y = 0; w = 32; h = 32;
-                quad = 8;
-                func = function() openTileset = inverter(openTileset) end
-            };
-            {
-                --alt
-                id = "ralt";
-                x = love.graphics.getWidth() - 96; y = 0; w = 32; h = 32;
-                quad = 11;
-                func = function()
-                    if state ~= "placing blocks" and state ~= "deleting objects" then state = "placing blocks"
-                    else state = "placing objects" end
+                id = "t",
+                normal = 13, 
+                x = 422, y = 0, w = 52, h = 50,
+                callback = function()
+                    state = "changing layer"
                 end
-            };
+            },
             {
-                --backspace
-                id = "backspace";
-                stateRequire = {"placing blocks"; "placing objects"; "deleting blocks"; "deleting objects"; "changing layer"};
-                x = love.graphics.getWidth() - 64; y = 0; w = 32; h = 32;
-                quad = 12;
-                func = function()
-                    if state == "changing layer" then meta.map.blocks[layerId] = {}--!delete layer
-                    elseif state ~= "deleting blocks" and state ~= "placing objects" then state = "deleting blocks"
-                    else state = "deleting objects" end
+                id = "f",
+                normal = 1,
+                x = 475, y = 0, w = 52, h = 50,
+                callback = function()
+                    navBar = inverter(navBar)
                 end
-            };
+            },
             {
-                --escape
-                id = "escape";
-                x = love.graphics.getWidth() - 32; y = 0; w = 32; h = 32;
-                quad = 13;
-                func = function()
+                id = "alt",
+                normal = 10,
+                x = love.graphics.getWidth() - 258, y = 0, w = 76, h = 50,
+                callback = function()
+                    if state == "placing blocks" or state == "deleting objects" then
+                        state = "placing objects"
+                    elseif state == "placing objects" or state == "deleting blocks" or state == "looking" or state == "changing layer" then
+                        state = "placing blocks"
+                    end
+                end
+            },
+            {
+                id = "backspace",
+                normal = 11, 
+                x = love.graphics.getWidth() - 181, y = 0, w = 104, h = 50,
+                callback = function()
+                    if state == "deleting objects" or state == "placing blocks" or state == "looking" then
+                        state = "deleting blocks"
+                    elseif state == "deleting blocks" or state == "placing objects" then
+                        state = "deleting objects"
+                    elseif state == "changing layer" then
+                        deleteLayer(layerId)
+                    end
+                end
+            },
+            {
+                id = "esc",
+                normal = 12, 
+                x = love.graphics.getWidth() - 76, y = 0, w = 76, h = 50,
+                callback = function()
+                    editor.id = nil
                     tileset.sheet:release()
-                    mapBatch:release()
-                    gs.switch(states.manager)
+                    for _, quad in ipairs(tileset.quads) do
+                        quad:release()
+                    end
+                    gamestate.switch(states.manager)
                 end
             }
         }
     end
-    tileset = {} --game tiles
-    trash = {} --all blocks deleted
-    --#variables--
-    --^strings^--
-    state = "placing blocks"
-    --^numbers^--
-    --^textures values^--
-    textureId = 1 --texture quad
-    textureR = 0
-    textureSx, textureSy = 1, 1
-    --^others^--
-    layerId = 1 
-    objectId = 1
+    keybinds = {
+        {
+            id = "a",
+            callback = function()
+                editorOffSetX = editorOffSetX - meta.map.grid.size * math.floor(meta.settings.ui.touch.sensitivity / 100 * 3)
+            end
+        },
+        {
+            id = "w",
+            callback = function()
+                editorOffSetY = editorOffSetY - meta.map.grid.size * math.floor(meta.settings.ui.touch.sensitivity / 100 * 3)
+            end
+        },
+        {
+            id = "s",
+            callback = function()
+                editorOffSetY = editorOffSetY + meta.map.grid.size * math.floor(meta.settings.ui.touch.sensitivity / 100 * 3)
+            end
+        },
+        {
+            id = "d",
+            callback = function()
+                editorOffSetX = editorOffSetX + meta.map.grid.size * math.floor(meta.settings.ui.touch.sensitivity / 100 * 3)
+            end
+        }
+    }
+    trash = {}
+    --%numbers&--
+    zoom = 1
     editorOffSetX, editorOffSetY = 0, 0
-    memoryUsage = 0
-    --^bools^--
-    openTileset = true
-    --#cmds--
-    if love.filesystem.getInfo("maps/" .. editor.id .. "/tileset.json") and love.filesystem.getInfo("maps/" .. editor.id .. "/tileset.png") then tileset.sheet, tileset.quads = atlasparser.getQuads("maps/" .. editor.id .. "/tileset")
-    else
-        tileset.sheet = love.graphics.newImage("assets/images/defaultTexture.png")
-        tileset.quads = {love.graphics.newQuad(0, 0, 32, 32, tileset.sheet)}
+    textureId = 1
+    blockR = 0
+    blockSx, blockSy = 1, 1
+    objectId = 1
+    layerId = 1
+    navBarx = 0
+    x0, y0 = 0, 0 
+    x1, y1 = love.graphics.getWidth(), love.graphics.getHeight()
+    --%strings%--
+    state = "placing blocks"
+    --%booleans%--
+    navBar = true
+    --&commands&--
+    --%tileset%--
+    tileset = {}
+    tileset.sheet = love.graphics.newImage("assets/images/defaultTexture.png")
+    tileset.quads = {love.graphics.newQuad(0, 0, 32, 32, tileset.sheet)}
+    if love.filesystem.getInfo(editor.id .. "/tileset.json") and love.filesystem.getInfo(editor.id .. "/tileset.png") then
+        tileset.sheet, tileset.quads = atlasparser.getQuads(editor.id .. "/tileset")
     end
     mapBatch = love.graphics.newSpriteBatch(tileset.sheet)
 end
 
 function editor:draw()
-    if meta.settings.theme == "light" then love.graphics.setBackgroundColor(.5, .5, .5, 1) --background color
-    elseif meta.settings.theme == "carmin" then 
-        local background = love.graphics.newGradient("vertical", {102 / 255; 19 / 255; 46 / 255; 1}, {60 / 255; 179 / 255; 113 / 255; 1})
-        love.graphics.draw(background, 0, 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
-    elseif meta.settings.theme == "curruption" then
-        local background = love.graphics.newGradient("vertical", {0; 82 / 255; 185 / 255; 1}, {139 / 255; 0; 139 / 255; 1})
-        love.graphics.draw(background, 0, 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
-    elseif meta.settings.theme == "platnium" then
-        local background = love.graphics.newGradient("horizontal", {0, 0, 0, 1}, {.5, .5, .5, 1})
-        love.graphics.draw(background, 0, 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
-    elseif meta.settings.theme == "fox11" then love.graphics.setBackgroundColor(162 / 255, 112 / 255, 87 / 255, 1)
-    else love.graphics.setBackgroundColor(0, 0, 0, 1) end--background color
-    --#map parser--
-    --^spritebatch update^--
-    mapBatch:clear()--clean the spritebatch
-    for _, layer in ipairs(meta.map.blocks) do for _, block in ipairs(layer) do mapBatch:add(tileset.quads[block.textureId], block.x - editorOffSetX * meta.map.gridSize, block.y - editorOffSetY * meta.map.gridSize, block.r, block.sx, block.sy, block.ox, block.oy) end end
-    love.graphics.draw(mapBatch)--spritebatch draw--
-    --^objects--
-    for _, object in ipairs(meta.map.objects) do
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.rectangle("line", object.x - object.ox - editorOffSetX * meta.map.gridSize, object.y - object.oy - editorOffSetY * meta.map.gridSize, object.w, object.h)
-        love.graphics.print(object.id, object.x + object.w / 2 - font:getWidth(object.id) / 2 - editorOffSetX * meta.map.gridSize, object.y + object.h / 2 - font:getHeight(object.id) / 2 - editorOffSetY * meta.map.gridSize, 0, 1, 1, object.ox, object.oy)
-        love.graphics.setColor(1, 1, 1, .2)
-        love.graphics.rectangle("fill", object.x - object.ox - editorOffSetX * meta.map.gridSize, object.y - object.oy - editorOffSetY * meta.map.gridSize, object.w, object.h)
+    --&background&--
+    local _background
+    if meta.settings.gui.theme == "light" then
+        love.graphics.setBackgroundColor(.6, .6, .6, 1)
+    elseif meta.settings.gui.theme == "curruption" then
+        _background = love.graphics.newGradient("vertical", {0, 82 / 255, 185 / 255, 1}, {139 / 255, 0, 139 / 255, 1})
+    elseif meta.settings.gui.theme == "carmin" then
+        _background = love.graphics.newGradient("vertical", {102 / 255, 19 / 255, 46 / 255, 1}, {60 / 255, 179 / 255, 113 / 255, 1})
+    elseif meta.settings.gui.theme == "platnium" then
+        _background = love.graphics.newGradient("horizontal", {0, 0, 0, 1}, {.5, .5, .5, 1})
+    elseif meta.settings.gui.theme == "fox11" then
+        love.graphics.setBackgroundColor(162 / 255, 112 / 255, 87 / 255, 1)
     end
-    --#GUI--
-    --^grid^--
-    love.graphics.setColor(meta.settings.grid.color[1] / 255, meta.settings.grid.color[2] / 255, meta.settings.grid.color[3] / 255, meta.settings.grid.color[4] / 100)
-    for _x = -meta.map.gridSize / 2, love.graphics.getWidth(), meta.map.gridSize do for _y = -meta.map.gridSize / 2, love.graphics.getHeight(), meta.map.gridSize do love.graphics.rectangle("line", _x, _y, meta.map.gridSize, meta.map.gridSize) end end
-    --^show touch^--
-    if meta.settings.touch.show and cx and cy then
-        love.graphics.setColor(0, 1, 0, 1)
-        love.graphics.rectangle("line", cx - meta.map.gridSize / 2 - editorOffSetX * meta.map.gridSize, cy - meta.map.gridSize / 2 - editorOffSetY * meta.map.gridSize, meta.map.gridSize, meta.map.gridSize)
+    if _background then
+        love.graphics.draw(_background, 0, 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
     end
-    --^select texture^--
-    if state == "placing blocks" and openTileset then
-        love.graphics.setColor(.75, .75, .75, 1)
-        love.graphics.rectangle("fill", love.graphics.getWidth() - 180 , 0, 180, love.graphics.getHeight())
-        love.graphics.setColor(.25, .25, .25, 1)
-        love.graphics.setLineWidth(16)
-        love.graphics.line(love.graphics.getWidth() - 180, 0, love.graphics.getWidth() - 180, love.graphics.getHeight())
-        love.graphics.setLineWidth(1)
-        love.graphics.setColor(1, 1, 1, 1)
-        local _spriteX, _spriteY = love.graphics.getWidth() - 164, 52
-        for _, quad in ipairs(tileset.quads) do
-            local _spriteW, _spriteH = quad:getTextureDimensions()
-            if _spriteX + _spriteW > love.graphics.getWidth() then
-                _spriteX = love.graphics.getWidth() - 164
-                _spriteY = _spriteY + _spriteH
-            end
-            if _spriteY + _spriteH > love.graphics.getHeight() then _spriteY = 52 end
-            love.graphics.draw(tileset.sheet, quad, _spriteX, _spriteY)
-            if suit.Button("", {id = _}, _spriteX, _spriteY, _spriteW, _spriteH).hit then textureId = _ end
-            love.graphics.rectangle("line", _spriteX, _spriteY, _spriteW, _spriteH)
-            _spriteX = _spriteX + _spriteW
+    --&map&--
+    mapBatch:clear()
+    for l = getLastLayer(), 1, -1 do
+        for _, block in ipairs(meta.map.blocks) do
+            if l == block.layerId then
+                mapBatch:add(tileset.quads[block.textureId], block.x - editorOffSetX, block.y - editorOffSetY, block.r, block.sx, block.sy, block.ox, block.oy)
+            end 
         end
     end
+    cam:draw(function()
+        love.graphics.draw(mapBatch)
+        --&show objects&--
+        for _, object in ipairs(meta.map.objects) do
+            love.graphics.setColor(.25, .25, .25, .5)
+            love.graphics.rectangle("fill", object.x - editorOffSetX, object.y - editorOffSetY, meta.map.grid.size, meta.map.grid.size)
+            love.graphics.setColor(.5, .5, .5, 1)
+            love.graphics.rectangle("line", object.x - editorOffSetX, object.y - editorOffSetY, meta.map.grid.size, meta.map.grid.size)
+            love.graphics.print(object.id, object.x - editorOffSetX + meta.map.grid.size / 2, object.y - editorOffSetY + meta.map.grid.size / 2, 0, 1, 1, font:getWidth(object.id) / 2, font:getHeight() / 2)
+        end
+        --&GUI&--
+        --%grid%--
+        if meta.settings.gui.grid.show then
+            love.graphics.setColor(meta.settings.gui.grid.color[1] / 255, meta.settings.gui.grid.color[2] / 255, meta.settings.gui.grid.color[3] / 255, meta.settings.gui.grid.color[4] / 100)
+            for x = meta.map.grid.size * math.floor(x0 / meta.map.grid.size), x1, meta.map.grid.size do
+                for y = meta.map.grid.size * math.floor(y0 / meta.map.grid.size), y1, meta.map.grid.size do
+                    love.graphics.rectangle("line", x, y, meta.map.grid.size, meta.map.grid.size)
+                end
+            end
+        end
+        --%show touches%--
+        if meta.settings.gui.infos.touch then
+            love.graphics.setColor(0, 1, 0, 1)
+            for _, touch in ipairs(love.touch.getTouches()) do
+                local _tx, _ty = cam:worldCoords(love.touch.getPosition(touch))
+                love.graphics.rectangle("line", math.multiply(_tx, meta.map.grid.size), math.multiply(_ty, meta.map.grid.size), meta.map.grid.size, meta.map.grid.size)
+            end
+        end
+        --&preview&--
+        local _mx, _my = cam:worldCoords(love.mouse.getPosition())
+        if _mx and _my then
+            love.graphics.setColor(1, 1, 1, .8)
+            love.graphics.draw(tileset.sheet, tileset.quads[textureId], math.multiply(_mx, meta.map.grid.size), math.multiply(_my, meta.map.grid.size))
+        end
+    end)
+
+    --%tiles%--
+    love.graphics.setColor(.5, .5, .5, 1)
+    love.graphics.rectangle("fill", love.graphics.getWidth() - 240 + navBarx, 0, 240, love.graphics.getHeight())
+    love.graphics.setColor(.25, .25, .25, 1)
+    love.graphics.rectangle("fill", love.graphics.getWidth() - 256 + navBarx, 0, 16, love.graphics.getHeight())
     love.graphics.setColor(1, 1, 1, 1)
-    --^buttons--
-    for _, _button in ipairs(buttons) do
-        if not _button.stateRequire or table.content(_button.stateRequire, state) then
-            if mobile then
-                if suit.isActive(_button.id) then love.graphics.draw(buttonsTexture.sheet, buttonsTexture.quads[_button.active], _button.x, _button.y, 0, 2, 2)
-                else love.graphics.draw(buttonsTexture.sheet, buttonsTexture.quads[_button.normal], _button.x, _button.y, 0, 2, 2) end
+    local _tilex, _tiley = love.graphics.getWidth() - 224, 64
+    for _, quad in ipairs(tileset.quads) do
+        if _tilex > love.graphics.getWidth() then
+            _tilex = love.graphics.getWidth() - 224
+            _tiley = _tiley + 32
+        end
+        love.graphics.draw(tileset.sheet, quad, _tilex + navBarx, _tiley, 0, meta.map.grid.size / 32, meta.map.grid.size / 32)
+        if quad == tileset.quads[textureId] then
+            love.graphics.setColor(0, 1, 0, 1)
+        end
+        suit.registerHitbox(_, _tilex + navBarx, _tiley, 32, 32)
+        if suit.mouseReleasedOn(_) then
+            textureId = _
+        end
+        love.graphics.rectangle("line", _tilex + navBarx, _tiley, 32, 32)
+        love.graphics.setColor(1, 1, 1, 1)
+        _tilex = _tilex + 32
+    end
+    --%buttons%--
+    for _, button in ipairs(buttons.editor.features) do
+        if mobile then
+            if suit.isActive(button.id) then
+                love.graphics.draw(buttons.editor.sheet.texture, buttons.editor.sheet.quads[button.active], button.x, button.y, 0, 2, 2)
             else
-                if suit.isActive(_button.id) then love.graphics.setColor(.5, .5, .5, 1) end
-                love.graphics.draw(buttonsTexture.sheet, buttonsTexture.quads[_button.quad], _button.x, _button.y, 0, 2, 2)
-                love.graphics.setColor(1, 1, 1, 1)
+                love.graphics.draw(buttons.editor.sheet.texture, buttons.editor.sheet.quads[button.normal], button.x, button.y, 0, 2, 2)
             end
+        else
+            if suit.isActive(button.id) then
+                love.graphics.setColor(.25, .25, .25, 1)
+            end
+            love.graphics.draw(buttons.editor.sheet.texture, buttons.editor.sheet.quads[button.normal], button.x, button.y, 0, 2, 2)
+            love.graphics.setColor(1, 1, 1, 1)
         end
     end
-    --^text and infos^--
-    love.graphics.draw(tileset.sheet, tileset.quads[textureId], 256 + meta.map.gridSize / 2, 52 + meta.map.gridSize / 2, textureR, textureSx, textureSy, meta.map.gridSize / 2, meta.map.gridSize / 2)
-    if meta.settings.theme == "light" then love.graphics.setColor(.25, .25, .25, 1)
-    elseif meta.settings.theme == "curruption" then love.graphics.setColor(1, 1, 0, 1)
-    elseif meta.settings.theme == "carmin" then love.graphics.setColor(0, 1, 1, 1)
-    elseif meta.settings.theme == "platnium" then love.graphics.setColor(.5, .5, .5, 1)
-    elseif meta.settings.theme == "fox11" then love.graphics.setColor(255 / 255, 221 / 255, 204 / 255, 1)
-    else love.graphics.setColor(1, 1, 1, 1) end
-    love.graphics.rectangle("line", 256, 52, meta.map.gridSize, meta.map.gridSize)
-    love.graphics.print(lang.editor.mode .. state .. "\n" .. lang.editor.objectId .. objectId .. "\n" .. lang.editor.layer .. layerId .. "\nx: " .. editorOffSetX .. " y: " .. editorOffSetY, 0, 52)
-    if meta.settings.gui.optinalInfos then love.graphics.print(lang.editor.mapName .. editor.id .. "\nFPS: " .. love.timer.getFPS() .. " RAM: " .. memoryUsage, 0, font:getHeight() * 4 + 50) end
+    --%infos%--
+    love.graphics.draw(tileset.sheet, tileset.quads[textureId], font:getWidth(lang.editor.mode .. state) + 16 + meta.map.grid.size / 2, 50 + meta.map.grid.size / 2, blockR, blockSx, blockSy, meta.map.grid.size / 2, meta.map.grid.size / 2)
+    if meta.settings.gui.theme == "light" then
+        love.graphics.setColor(.25, .25, .25, 1)
+    elseif meta.settings.gui.theme == "curruption" then
+        love.graphics.setColor(1, 1, 0, 1)
+    elseif meta.settings.gui.theme == "carmin" then
+        love.graphics.setColor(0, 1, 1, 1)
+    elseif meta.settings.gui.theme == "platnium" then
+        love.graphics.setColor(.5, .5, .5, 1)
+    elseif meta.settings.gui.theme == "fox11" then
+        love.graphics.setColor(0, 1, 0, 1)
+    end
+    love.graphics.rectangle("line", font:getWidth(lang.editor.mode .. state) + 16, 50, meta.map.grid.size, meta.map.grid.size)
+    love.graphics.print(lang.editor.mode .. state, 0, 50)
+    love.graphics.print(lang.editor.objectId .. objectId, 0, 62)
+    love.graphics.print(lang.editor.layer .. layerId, 0, 74)
+    love.graphics.print("X: " .. editorOffSetX .. " Y: " .. editorOffSetY, 0, 86)
+    if meta.settings.gui.infos.optionals then
+        love.graphics.print(lang.editor.mapName .. editor.id, 0, 98)
+        love.graphics.print("FPS: " .. love.timer.getFPS() .. " RAM: " .. math.byteToSize(love.graphics.getStats().texturememory), 0, 110)
+        love.graphics.print("Zoom: " .. math.round(zoom, 2), 0, 122)
+    end
     love.graphics.setColor(1, 1, 1, 1)
 end
 
-function editor:update(_elapsed)
-    memoryUsage = math.byteToSize(love.graphics.getStats().texturememory)--memory usage
-    --#buttons--
-    for _, _button in ipairs(buttons) do if suit.Button("", {id = _button.id}, _button.x, _button.y, _button.w, _button.h).hit and (not _button.stateRequire or table.content(_button.stateRequire, state)) then _button.func() end end
-    --#cam
-    --x--
-    if love.keyboard.isDown("d") then editorOffSetX = editorOffSetX - math.floor(meta.settings.touch.sensitivity / 100 * 3)
-    elseif love.keyboard.isDown("a") then editorOffSetX = editorOffSetX + math.floor(meta.settings.touch.sensitivity / 100 * 3) end
-    --y
-    if love.keyboard.isDown("w") then editorOffSetY = editorOffSetY - math.floor(meta.settings.touch.sensitivity / 100 * 3)
-    elseif love.keyboard.isDown("s") then editorOffSetY = editorOffSetY + math.floor(meta.settings.touch.sensitivity / 100 * 3) end
-    --touch
-    for _, touch in ipairs(love.touch.getTouches()) do tx, ty = love.touch.getPosition(touch) end
-    if love.mouse.isDown(1) then tx, ty = love.mouse.getPosition() end
-    if tx and ty then
-        --#center touch update--
-        cx, cy = math.multiply(tx + meta.map.gridSize / 2 + editorOffSetX * meta.map.gridSize, meta.map.gridSize), math.multiply(ty + meta.map.gridSize / 2 + editorOffSetY * meta.map.gridSize, meta.map.gridSize)  --center the touch
-        --placing blocks and objects
-        if (ty > 50 and not (tx < 50 and ty > love.graphics.getHeight() - 52)) and (tx < love.graphics.getWidth() - 180 or state ~= "placing blocks" or not openTileset) then 
-            if state == "placing blocks" and not canPlaceBlock() then createBlock()
-            elseif state == "deleting blocks" then deleteBlock()
-            elseif state == "placing objects" and not canPlaceObjects() then createObject()
-            elseif state == "deleting objects" then deleteObject() end
+function editor:update(elapsed)
+    cam:zoomTo(zoom)--camera zoom
+    x0, y0 = cam:worldCoords(0, 0)
+    x1, y1 = cam:worldCoords(love.graphics.getWidth(), love.graphics.getHeight())
+    if navBar then
+        if navBarx > 0 then
+            navBarx = navBarx - 400 * elapsed
         end
-        tx, ty = nil, nil
-    end
-end
-
-function editor:touchmoved(_id, _x, _y, _dx, _dy, _pressure)
-    --#placing blocks and objects--
-    if (_x > 50 and _y > 52) and (_x < love.graphics.getWidth() - 180 or state ~= "placing blocks" or not openTileset) and meta.settings.touch.swipe then 
-        --#cam--
-        if state == "moving" then
-            --x
-            if _dx > 0 and math.abs(_dx) > math.abs(_dy) then editorOffSetX = editorOffSetX - math.floor(meta.settings.touch.sensitivity / 100 * 3)
-            elseif _dx < 0 and math.abs(_dx) > math.abs(_dy) then editorOffSetX = editorOffSetX + math.floor(meta.settings.touch.sensitivity / 100 * 3) end
-            --y
-            if _dy > 0 and math.abs(_dy) > math.abs(_dx) then editorOffSetY = editorOffSetY - math.floor(meta.settings.touch.sensitivity / 100 * 3)
-            elseif _dy < 0 and math.abs(_dy) > math.abs(_dx) then editorOffSetY = editorOffSetY + math.floor(meta.settings.touch.sensitivity / 100 * 3) end
+    else
+        if navBarx < 256 then
+            navBarx = navBarx + 400 * elapsed
         end
     end
-end
-
-----------------object orientation--------------------
---#blocks--
-function createBlock()
-    local _block = {}
-    _block.x, _block.y, _block.w, _block.h = cx, cy, meta.map.gridSize, meta.map.gridSize
-    _block.r = textureR
-    _block.sx, _block.sy = textureSx, textureSy
-    _block.ox, _block.oy = meta.map.gridSize / 2, meta.map.gridSize / 2
-    _block.textureId = textureId
-    if not meta.map.blocks[layerId] then meta.map.blocks[layerId] = {} end
-    table.insert(meta.map.blocks[layerId], _block)
-end
-
-function canPlaceBlock()
-    if meta.map.blocks[layerId] then
-        for _, block in ipairs(meta.map.blocks[layerId]) do
-            if block.x == cx and block.y == cy then
-                if block.textureId ~= textureId then block.TextureId = textureId end
-                if block.r ~= textureR then block.r = textureR end
-                if block.sx ~= textureSx then block.sx = textureSx end
-                if block.sy ~= textureSy then block.sy = textureSy end
-                return true
+    --&buttons&--
+    for _, button in ipairs(buttons.editor.features) do
+        suit.registerHitbox(button.id, button.x, button.y, button.w, button.h)
+        if suit.mouseReleasedOn(button.id) then --it is same than isHit
+            button.callback()
+        end
+    end
+    --&keys&--
+    for _, bind in ipairs(keybinds) do
+        if love.keyboard.isDown(bind.id) then
+            bind.callback()
+        end
+    end
+    --&touches update&--
+    for _, touch in ipairs(love.touch.getTouches()) do
+        local _tx, _ty = love.touch.getPosition(touch) --get touch position
+        if not suit.anyHovered() and (not navBar or _tx < love.graphics.getWidth() - 256) then
+            _tx, _ty = cam:worldCoords(_tx, _ty)
+            local centerx, centery = math.multiply(_tx, meta.map.grid.size) + editorOffSetX, math.multiply(_ty, meta.map.grid.size) + editorOffSetY
+            if state == "placing blocks" then
+                if not canPlaceBlock(textureId, layerId, centerx + meta.map.grid.size / 2, centery + meta.map.grid.size / 2, blockR, blockSx, blockSy) then
+                    createBlock(textureId, layerId, centerx + meta.map.grid.size / 2, centery + meta.map.grid.size / 2, blockR, blockSx, blockSy, meta.map.grid.size / 2, meta.map.grid.size / 2)
+                end
+            elseif state == "deleting blocks" then
+                deleteBlock(layerId, centerx + meta.map.grid.size / 2, centery + meta.map.grid.size / 2)
+            elseif state == "placing objects" then
+                if not canPlaceObject(objectId, centerx, centery) then
+                    createObject(objectId, centerx, centery)
+                end
+            elseif state == "deleting objects" then
+                deleteObject(centerx, centery)
             end
         end
     end
-end 
-
-function deleteBlock()
-    if meta.map.blocks[layerId] then
-        for _, block in ipairs(meta.map.blocks[layerId]) do
-            if block.x == cx and block.y == cy then
-                table.insert(trash, 1, block)
-                table.remove(meta.map.blocks[layerId], _)
-                break
+    local _mx, _my = love.mouse.getPosition()
+    if _mx and _my then
+        if not suit.anyHovered() and (not navBar or _mx < love.graphics.getWidth() - 256) then
+            _mx, _my = cam:worldCoords(_mx, _my)
+            local centerx, centery = math.multiply(_mx, meta.map.grid.size) + editorOffSetX, math.multiply(_my, meta.map.grid.size) + editorOffSetY
+            if state == "placing blocks" then
+                if not canPlaceBlock(textureId, layerId, centerx + meta.map.grid.size / 2, centery + meta.map.grid.size / 2, blockR, blockSx, blockSy) then
+                    createBlock(textureId, layerId, centerx + meta.map.grid.size / 2, centery + meta.map.grid.size / 2, blockR, blockSx, blockSy, meta.map.grid.size / 2, meta.map.grid.size / 2)
+                end
+            elseif state == "deleting blocks" then
+                deleteBlock(layerId, centerx + meta.map.grid.size / 2, centery + meta.map.grid.size / 2)
+            elseif state == "placing objects" then
+                if not canPlaceObject(objectId, centerx, centery) then
+                    createObject(objectId, centerx, centery)
+                end
+            elseif state == "deleting objects" then
+                deleteObject(centerx, centery)
             end
+        end
+    end
+    if state == "looking" then
+        zoom = touches:pinch(zoom, .5, 2)
+        touches:zoomTo(zoom)
+        touches:swipe(
+            function(id, x, y, dx, dy, pressure, zoom)
+                editorOffSetX = editorOffSetX + meta.map.grid.size * math.floor(meta.settings.ui.touch.sensitivity / 500 * (dx / zoom))
+            end,
+            function(id, x, y, dx, dy, pressure, zoom)
+                editorOffSetY = editorOffSetY + meta.map.grid.size * math.floor(meta.settings.ui.touch.sensitivity / 500 * (dy / zoom))
+            end,
+            function(id, x, y, dx, dy, pressure, zoom)
+                editorOffSetX = editorOffSetX + meta.map.grid.size * math.floor(meta.settings.ui.touch.sensitivity / 500 * (dx / zoom))
+            end,
+            function(id, x, y, dx, dy, pressure, zoom)
+               editorOffSetY = editorOffSetY + meta.map.grid.size * math.floor(meta.settings.ui.touch.sensitivity / 500 * (dy / zoom))
+            end,
+            nil
+        )
+    end
+end
+
+function editor:touchpressed(id, x, y, dx, dy, pressure)
+    touches:touchpressed(id, x, y, dx, dy, pressure)
+end
+
+function editor:touchmoved(id, x, y, dx, dy, pressure)
+    touches:touchmoved(id, x, y, dx, dy, pressure)
+end
+
+function editor:touchreleased(id, x, y, dx, dy, pressure)
+    touches:touchreleased(id, x, y, dx, dy, pressure)
+end
+
+function editor:wheelmoved(x, y)
+    zoom = math.clamp(.5, zoom * y, 2)
+end
+--&blocks&--
+function createBlock(_texture, _layer, _x, _y, _r, _sx, _sy, _ox, _oy)
+    table.insert(meta.map.blocks, 
+        {
+            textureId = _texture,
+            layerId = _layer,
+            x = _x, y = _y,
+            r = _r,
+            sx = _sx, sy = _sy,
+            ox = _ox, oy = _oy
+        }
+    )
+end
+
+function deleteBlock(_layer, _x, _y)
+    for _, block in ipairs(meta.map.blocks) do
+        if block.x == _x and block.y == _y and block.layerId == _layer then
+            table.insert(trash, 1, block)
+            table.remove(meta.map.blocks, _)
+            break
         end
     end
 end
 
---#objects--
-function createObject()
-    local _object = {}
-    _object.x, _object.y, _object.w, _object.h = cx, cy, meta.map.gridSize, meta.map.gridSize
-    _object.ox, _object.oy = meta.map.gridSize / 2, meta.map.gridSize / 2
-    _object.id = objectId
-    table.insert(meta.map.objects, _object)
+function deleteLayer(_layer)
+    for _, block in ipairs(meta.map.blocks) do 
+        if block.layerId == _layer then
+            table.insert(trash, 1, block)
+            table.remove(meta.map.blocks, _)
+        end
+    end
 end
 
-function canPlaceObjects()
-    for _, object in ipairs(meta.map.objects) do
-        if object.x == cx and object.y == cy then
-            if object.id ~= objectId then object.id = objectId end
+function canPlaceBlock(_texture, _layer, _x, _y, _r, _sx, _sy)
+    for _, block in ipairs(meta.map.blocks) do
+        if block.x == _x and block.y == _y and block.layerId == _layer then
+            block.textureId = _texture
+            block.r = _r
+            block.sx = _sx
+            block.sy = _sy
             return true
         end
     end
+    return false
 end
 
-function deleteObject()
+--&objects&--
+function createObject(_id, _x, _y)
+    table.insert(meta.map.objects, 
+        {
+            id = _id,
+            x = _x, y = _y
+        }
+    )
+end
+
+function canPlaceObject(_id, _x, _y)
     for _, object in ipairs(meta.map.objects) do
-        if object.x == cx and object.y == cy then
+        if object.x == _x and object.y == _y then
+            object.id = _id
+            return true
+        end
+    end
+    return false
+end
+
+function deleteObject(_x, _y)
+    for _, object in ipairs(meta.map.objects) do
+        if object.x == _x and object.y == _y then
             table.remove(meta.map.objects, _)
             break
         end
     end
+end
+
+function getLastLayer()
+    local lastLayer = 1
+    for b, block in ipairs(meta.map.blocks) do
+        lastLayer = math.max(block.layerId, lastLayer)
+    end
+    return lastLayer
 end
 
 return editor

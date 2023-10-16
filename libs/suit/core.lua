@@ -105,7 +105,7 @@ function suit:registerMouseHit(id, ul_x, ul_y, hit)
 		if self.active == nil and self.mouse_button_down then
 			self.active = id
 		end
-	end
+    end
 	return self:getStateName(id)
 end
 
